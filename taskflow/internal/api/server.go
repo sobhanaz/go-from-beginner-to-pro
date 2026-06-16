@@ -11,10 +11,10 @@ import (
 // TaskRepository is the behavior the API needs from task storage.
 // Every method is scoped to a userID so users only see their own tasks.
 type TaskRepository interface {
-	Create(userID int64, title string) (models.Task, error)
-	List(userID int64) ([]models.Task, error)
+	Create(userID int64, title, priority string) (models.Task, error)
+	List(userID int64, filter models.TaskFilter) ([]models.Task, error)
 	Get(userID, id int64) (models.Task, error)
-	Update(userID, id int64, title string, done bool) (models.Task, error)
+	Update(userID, id int64, title, priority string, done bool) (models.Task, error)
 	Delete(userID, id int64) error
 }
 

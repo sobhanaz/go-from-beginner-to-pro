@@ -4,6 +4,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	_ "modernc.org/sqlite" // pure-Go SQLite driver, registered as "sqlite"
 )
@@ -41,9 +42,21 @@ func migrate(db *sql.DB) error {
 		user_id    INTEGER NOT NULL,
 		title      TEXT    NOT NULL,
 		done       INTEGER NOT NULL DEFAULT 0,
+		priority   TEXT    NOT NULL DEFAULT 'medium',
 		created_at TEXT    NOT NULL,
 		FOREIGN KEY (user_id) REFERENCES users(id)
 	);`
-	_, err := db.Exec(schema)
-	return err
+	if _, err := db.Exec(schema); err != nil {
+		return err
+	}
+
+	// Idempotent upgrade: add the priority column to databases created before
+	// it existed. SQLite errors with "duplicate column name" if it's already
+	// there, which we can safely ignore.
+	if _, err := db.Exec(
+		`ALTER TABLE tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'medium'`,
+	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
+	return nil
 }

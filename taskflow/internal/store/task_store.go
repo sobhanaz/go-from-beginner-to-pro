@@ -22,12 +22,12 @@ func NewTaskStore(db *sql.DB) *TaskStore {
 	return &TaskStore{db: db}
 }
 
-// Create inserts a new task owned by userID.
-func (s *TaskStore) Create(userID int64, title string) (models.Task, error) {
+// Create inserts a new task owned by userID with the given priority.
+func (s *TaskStore) Create(userID int64, title, priority string) (models.Task, error) {
 	now := time.Now().UTC()
 	res, err := s.db.Exec(
-		`INSERT INTO tasks (user_id, title, done, created_at) VALUES (?, ?, 0, ?)`,
-		userID, title, now.Format(time.RFC3339),
+		`INSERT INTO tasks (user_id, title, done, priority, created_at) VALUES (?, ?, 0, ?, ?)`,
+		userID, title, priority, now.Format(time.RFC3339),
 	)
 	if err != nil {
 		return models.Task{}, fmt.Errorf("insert task: %w", err)
@@ -36,14 +36,31 @@ func (s *TaskStore) Create(userID int64, title string) (models.Task, error) {
 	if err != nil {
 		return models.Task{}, fmt.Errorf("last insert id: %w", err)
 	}
-	return models.Task{ID: id, UserID: userID, Title: title, Done: false, CreatedAt: now}, nil
+	return models.Task{
+		ID: id, UserID: userID, Title: title, Done: false,
+		Priority: priority, CreatedAt: now,
+	}, nil
 }
 
-// List returns all of userID's tasks, newest first.
-func (s *TaskStore) List(userID int64) ([]models.Task, error) {
-	rows, err := s.db.Query(
-		`SELECT id, user_id, title, done, created_at FROM tasks
-		 WHERE user_id = ? ORDER BY id DESC`, userID)
+// List returns userID's tasks (newest first), optionally narrowed by filter.
+// The query is built dynamically so each filter is an extra AND clause — and
+// every value is a bound parameter (?), never string-concatenated, to avoid
+// SQL injection.
+func (s *TaskStore) List(userID int64, f models.TaskFilter) ([]models.Task, error) {
+	query := `SELECT id, user_id, title, done, priority, created_at FROM tasks WHERE user_id = ?`
+	args := []any{userID}
+
+	if f.Done != nil {
+		query += ` AND done = ?`
+		args = append(args, *f.Done)
+	}
+	if f.Priority != "" {
+		query += ` AND priority = ?`
+		args = append(args, f.Priority)
+	}
+	query += ` ORDER BY id DESC`
+
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query tasks: %w", err)
 	}
@@ -63,7 +80,7 @@ func (s *TaskStore) List(userID int64) ([]models.Task, error) {
 // Get returns one of userID's tasks by ID, or ErrNotFound.
 func (s *TaskStore) Get(userID, id int64) (models.Task, error) {
 	row := s.db.QueryRow(
-		`SELECT id, user_id, title, done, created_at FROM tasks
+		`SELECT id, user_id, title, done, priority, created_at FROM tasks
 		 WHERE id = ? AND user_id = ?`, id, userID)
 	t, err := scanTask(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -76,10 +93,10 @@ func (s *TaskStore) Get(userID, id int64) (models.Task, error) {
 }
 
 // Update modifies one of userID's tasks.
-func (s *TaskStore) Update(userID, id int64, title string, done bool) (models.Task, error) {
+func (s *TaskStore) Update(userID, id int64, title, priority string, done bool) (models.Task, error) {
 	res, err := s.db.Exec(
-		`UPDATE tasks SET title = ?, done = ? WHERE id = ? AND user_id = ?`,
-		title, done, id, userID)
+		`UPDATE tasks SET title = ?, done = ?, priority = ? WHERE id = ? AND user_id = ?`,
+		title, done, priority, id, userID)
 	if err != nil {
 		return models.Task{}, fmt.Errorf("update task: %w", err)
 	}
@@ -113,7 +130,7 @@ func scanTask(sc scanner) (models.Task, error) {
 		t         models.Task
 		createdAt string
 	)
-	if err := sc.Scan(&t.ID, &t.UserID, &t.Title, &t.Done, &createdAt); err != nil {
+	if err := sc.Scan(&t.ID, &t.UserID, &t.Title, &t.Done, &t.Priority, &createdAt); err != nil {
 		return models.Task{}, err
 	}
 	t.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)

@@ -16,15 +16,48 @@ func parseID(r *http.Request) (int64, error) {
 	return strconv.ParseInt(r.PathValue("id"), 10, 64)
 }
 
-// GET /tasks
+// GET /tasks            list all of the user's tasks
+// GET /tasks?done=true  filter by completion
+// GET /tasks?priority=high  filter by priority
 func (s *Server) handleListTasks(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromContext(r)
-	tasks, err := s.tasks.List(userID)
+
+	var filter models.TaskFilter
+
+	// Optional ?done= filter. Accept only "true"/"false".
+	if v := r.URL.Query().Get("done"); v != "" {
+		done, err := strconv.ParseBool(v)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "done must be true or false")
+			return
+		}
+		filter.Done = &done
+	}
+
+	// Optional ?priority= filter. Validate against allowed values.
+	if v := r.URL.Query().Get("priority"); v != "" {
+		if !models.IsValidPriority(v) {
+			writeError(w, http.StatusBadRequest, "priority must be low, medium, or high")
+			return
+		}
+		filter.Priority = v
+	}
+
+	tasks, err := s.tasks.List(userID, filter)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not list tasks")
 		return
 	}
 	writeJSON(w, http.StatusOK, tasks)
+}
+
+// normalizePriority defaults an empty priority to "medium" and validates it.
+// Returns the value to store and whether it was valid.
+func normalizePriority(p string) (string, bool) {
+	if p == "" {
+		return models.PriorityMedium, true
+	}
+	return p, models.IsValidPriority(p)
 }
 
 // POST /tasks
@@ -39,7 +72,12 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "title is required")
 		return
 	}
-	task, err := s.tasks.Create(userID, in.Title)
+	priority, ok := normalizePriority(in.Priority)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "priority must be low, medium, or high")
+		return
+	}
+	task, err := s.tasks.Create(userID, in.Title, priority)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not create task")
 		return
@@ -84,7 +122,12 @@ func (s *Server) handleUpdateTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "title is required")
 		return
 	}
-	task, err := s.tasks.Update(userID, id, in.Title, in.Done)
+	priority, ok := normalizePriority(in.Priority)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "priority must be low, medium, or high")
+		return
+	}
+	task, err := s.tasks.Update(userID, id, in.Title, priority, in.Done)
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "task not found")
 		return

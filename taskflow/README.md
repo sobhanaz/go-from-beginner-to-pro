@@ -94,10 +94,16 @@ docker run --rm -p 8080:8080 -e TASKFLOW_JWT_SECRET=change-me taskflow
 |--------|------|------|---------|
 | GET | `/health` | — | 200 (public) |
 | GET | `/tasks` | — | 200 |
-| POST | `/tasks` | `{"title":"..."}` | 201 |
+| POST | `/tasks` | `{"title":"...","priority":"high"}` | 201 |
 | GET | `/tasks/{id}` | — | 200 / 404 |
-| PUT | `/tasks/{id}` | `{"title":"...","done":true}` | 200 / 404 |
+| PUT | `/tasks/{id}` | `{"title":"...","done":true,"priority":"low"}` | 200 / 404 |
 | DELETE | `/tasks/{id}` | — | 204 / 404 |
+
+**Task priority:** each task has a `priority` of `low`, `medium` (default), or
+`high`. Invalid values are rejected with `400`.
+
+**List filters** (combinable): `GET /tasks?done=true`, `GET /tasks?priority=high`,
+or both: `GET /tasks?priority=low&done=false`.
 
 ### Example session
 

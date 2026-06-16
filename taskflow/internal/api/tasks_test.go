@@ -161,3 +161,91 @@ func TestDuplicateEmail(t *testing.T) {
 		t.Errorf("duplicate status = %d; want 409", rec.Code)
 	}
 }
+
+// --- Priority feature tests ---
+
+// A task created without a priority defaults to "medium".
+func TestCreateTaskDefaultsPriority(t *testing.T) {
+	srv := newTestServer(t)
+	token := registerAndToken(t, srv, "p1@example.com")
+
+	rec := do(t, srv, "POST", "/tasks", `{"title":"no priority given"}`, token)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var task models.Task
+	_ = json.Unmarshal(rec.Body.Bytes(), &task)
+	if task.Priority != models.PriorityMedium {
+		t.Errorf("default priority = %q; want %q", task.Priority, models.PriorityMedium)
+	}
+}
+
+// A valid priority is stored and returned.
+func TestCreateTaskWithPriority(t *testing.T) {
+	srv := newTestServer(t)
+	token := registerAndToken(t, srv, "p2@example.com")
+
+	rec := do(t, srv, "POST", "/tasks", `{"title":"urgent","priority":"high"}`, token)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create status = %d", rec.Code)
+	}
+	var task models.Task
+	_ = json.Unmarshal(rec.Body.Bytes(), &task)
+	if task.Priority != models.PriorityHigh {
+		t.Errorf("priority = %q; want %q", task.Priority, models.PriorityHigh)
+	}
+}
+
+// An invalid priority is rejected with 400.
+func TestCreateTaskInvalidPriority(t *testing.T) {
+	srv := newTestServer(t)
+	token := registerAndToken(t, srv, "p3@example.com")
+
+	rec := do(t, srv, "POST", "/tasks", `{"title":"x","priority":"urgent"}`, token)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("invalid-priority status = %d; want 400", rec.Code)
+	}
+}
+
+// ?priority= and ?done= filters narrow the list correctly.
+func TestListTaskFilters(t *testing.T) {
+	srv := newTestServer(t)
+	token := registerAndToken(t, srv, "p4@example.com")
+
+	// Seed: one high (will be marked done), one low (stays not-done).
+	do(t, srv, "POST", "/tasks", `{"title":"high task","priority":"high"}`, token)
+	do(t, srv, "POST", "/tasks", `{"title":"low task","priority":"low"}`, token)
+	// Mark task id 1 (high) as done.
+	do(t, srv, "PUT", "/tasks/1", `{"title":"high task","priority":"high","done":true}`, token)
+
+	listLen := func(query string) int {
+		rec := do(t, srv, "GET", "/tasks"+query, "", token)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("list%s status = %d", query, rec.Code)
+		}
+		var tasks []models.Task
+		_ = json.Unmarshal(rec.Body.Bytes(), &tasks)
+		return len(tasks)
+	}
+
+	if n := listLen(""); n != 2 {
+		t.Errorf("no filter: got %d; want 2", n)
+	}
+	if n := listLen("?priority=high"); n != 1 {
+		t.Errorf("priority=high: got %d; want 1", n)
+	}
+	if n := listLen("?done=true"); n != 1 {
+		t.Errorf("done=true: got %d; want 1", n)
+	}
+	if n := listLen("?done=false"); n != 1 {
+		t.Errorf("done=false: got %d; want 1", n)
+	}
+	if n := listLen("?priority=low&done=false"); n != 1 {
+		t.Errorf("combined filter: got %d; want 1", n)
+	}
+
+	// A bad filter value is a 400.
+	if rec := do(t, srv, "GET", "/tasks?priority=bogus", "", token); rec.Code != http.StatusBadRequest {
+		t.Errorf("bad priority filter status = %d; want 400", rec.Code)
+	}
+}
