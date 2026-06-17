@@ -13,6 +13,10 @@ func fizzbuzz(n int) {
 			fmt.Println("Fizz")
 		case i%5 == 0:
 			fmt.Println("Buzz")
+		// case i%2 == 0:
+		// 	fmt.Println("Even")
+		// case i%2 != 0:
+		// 	fmt.Println("Odd")
 		default:
 			fmt.Println(i)
 		}
@@ -20,5 +24,5 @@ func fizzbuzz(n int) {
 }
 
 func main() {
-	fizzbuzz(20)
+	fizzbuzz(30)
 }
