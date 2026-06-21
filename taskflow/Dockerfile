@@ -21,8 +21,10 @@ WORKDIR /app
 COPY --from=build /taskflow /app/taskflow
 
 # Default config; override at runtime with -e or a compose file.
+# TASKFLOW_DB points at /app (which exists in the image). For persistence,
+# mount a volume there, e.g. `docker run -v taskflow-data:/app ...`.
 ENV TASKFLOW_ADDR=":8080" \
-    TASKFLOW_DB="/app/data/taskflow.db"
+    TASKFLOW_DB="/app/taskflow.db"
 
 EXPOSE 8080
 
