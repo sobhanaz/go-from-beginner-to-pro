@@ -1,0 +1,9 @@
+# Compiled binary
+/gosearch
+*.exe
+
+# Test/coverage artifacts
+*.test
+cover.out
+
+.DS_Store

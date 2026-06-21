@@ -92,6 +92,20 @@ This is the kind of project that gets you a **Go backend developer** interview.
 
 ---
 
+## 🗂️ Portfolio Projects in this repo
+
+Two complete, runnable Go projects — together they show both sides of backend work:
+
+| Project | Type | Highlights |
+|---------|------|-----------|
+| [**taskflow/**](taskflow/) | REST API (server) | JWT auth, SQLite, middleware, per-user data, tests, Docker |
+| [**gosearch/**](gosearch/) | CLI tool | concurrent worker-pool text search (mini-grep), regex, tests, race-clean |
+
+`taskflow` proves you can build a web service; `gosearch` proves you understand
+Go's concurrency model in a real command-line tool.
+
+---
+
 ## ✅ Progress Tracker
 
 - [x] Session 01 — Hello, Go
